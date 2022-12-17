@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/avast/retry-go"
 	"github.com/rs/zerolog/log"
 	concurrency "github.com/vsvp21/go-concurrency"
 	"sync"
@@ -57,7 +58,11 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 					continue
 				}
 
-				err = r.publisher.Publish(msg.RoutingKey, newPayload(msg.ID, p))
+				publish := func() error {
+					return r.publisher.Publish(msg.RoutingKey, newPayload(msg.ID, p))
+				}
+
+				err = retry.Do(publish, retry.Delay(PublishRetryDelay), retry.Attempts(PublishRetryAttempts), retry.Context(ctx))
 				if err != nil {
 					log.Error().Err(err).Msg("while publishing message")
 					continue

@@ -69,4 +69,3 @@ func main() {
 ## TODO:
 
 * Tests
-* Retry if publish fails

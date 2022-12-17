@@ -11,17 +11,21 @@ const (
 	statusConsumed    = true
 	statusNotConsumed = false
 
-	minBatchSize = 1
 	maxBatchSize = 1000
 )
 
-var ErrBatchSizeOutOfRange = errors.New("invalid batch size")
-var TableName = "outbox_messages"
+var (
+	ErrBatchSizeOutOfRange = errors.New("invalid batch size")
 
-type BatchSize int
+	TableName                 = "outbox_messages"
+	PublishRetryDelay         = time.Second
+	PublishRetryAttempts uint = 3
+)
+
+type BatchSize uint
 
 func (b BatchSize) Valid() error {
-	if b < minBatchSize || b > maxBatchSize {
+	if b == 0 || b > maxBatchSize {
 		return ErrBatchSizeOutOfRange
 	}
 
