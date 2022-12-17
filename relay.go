@@ -118,7 +118,7 @@ func (g messagesGenerator) getMessages(ctx context.Context, size BatchSize) <-ch
 
 	go func() {
 		defer func() {
-			defer close(ch)
+			close(ch)
 			log.Info().Msg("stream finished")
 		}()
 
