@@ -25,7 +25,7 @@ func (r *PgxRepository) Persist(ctx context.Context, messages []*Message) error 
 	query := fmt.Sprintf(`
 INSERT INTO %s (id, event_type, payload, exchange, routing_key)
 VALUES($1, $2, $3, $4, $5)
-`, OutboxTableName)
+`, TableName)
 
 	for _, event := range messages {
 		_, err = tx.Exec(
@@ -59,7 +59,7 @@ func (r *PgxRepository) Fetch(ctx context.Context, batchSize BatchSize) ([]*Mess
 SELECT id, event_type, exchange, routing_key, payload, consumed, created_at
 FROM %s
 WHERE consumed = $1 ORDER BY created_at DESC LIMIT $2
-`, OutboxTableName)
+`, TableName)
 
 	rows, err := r.db.Query(ctx, query, statusNotConsumed, batchSize)
 	if err != nil {
@@ -91,7 +91,7 @@ func (r *PgxRepository) MarkConsumed(ctx context.Context, messages []*Message) e
 		ids[i] = msg.ID
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", OutboxTableName)
+	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", TableName)
 	if _, err := r.db.Exec(ctx, query, statusConsumed, ids); err != nil {
 		return fmt.Errorf("%w: update consumed status failed", err)
 	}

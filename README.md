@@ -61,7 +61,7 @@ import "github.com/vsvp21/outbox"
 
 func main() {
 	// Your code ...
-	outbox.OutboxTableName = "custom"
+	outbox.TableName = "custom"
 	// Your code ...
 }
 ```

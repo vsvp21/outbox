@@ -16,7 +16,7 @@ const (
 )
 
 var ErrBatchSizeOutOfRange = errors.New("invalid batch size")
-var OutboxTableName = "outbox_messages"
+var TableName = "outbox_messages"
 
 type BatchSize int
 
