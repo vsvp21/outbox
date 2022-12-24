@@ -52,7 +52,10 @@ type Message struct {
 	CreatedAt  time.Time
 }
 
+type PersistFunc func() ([]*Message, error)
+
 type EventRepository interface {
+	PersistInTx(ctx context.Context, f PersistFunc) error
 	Persist(ctx context.Context, messages []*Message) error
 	Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error)
 	MarkConsumed(ctx context.Context, messages []*Message) error
