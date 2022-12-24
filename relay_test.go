@@ -20,7 +20,7 @@ func (p publisherMock) Publish(topic string, payload Payload) error {
 var generateMessages = func(n int) []*Message {
 	ms := make([]*Message, n)
 	for i := 0; i < n; i++ {
-		ms[i] = NewMessage("Test", map[string]int{"num": i}, "test1", "test2")
+		ms[i] = NewMessage("1", "Test", map[string]int{"num": i}, "test1", "test2")
 	}
 
 	return ms

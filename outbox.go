@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -32,9 +31,9 @@ func (b BatchSize) Valid() error {
 	return nil
 }
 
-func NewMessage(eventType string, payload interface{}, exchange, routingKey string) *Message {
+func NewMessage(id string, eventType string, payload interface{}, exchange, routingKey string) *Message {
 	return &Message{
-		ID:         uuid.New().String(),
+		ID:         id,
 		EventType:  eventType,
 		Payload:    payload,
 		Exchange:   exchange,

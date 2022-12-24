@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -31,7 +30,7 @@ VALUES($1, $2, $3, $4, $5)
 		_, err = tx.Exec(
 			ctx,
 			query,
-			uuid.New().String(),
+			event.ID,
 			event.EventType,
 			event.Payload,
 			event.Exchange,
