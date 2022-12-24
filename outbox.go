@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v4"
 	"time"
 )
 
@@ -52,7 +53,7 @@ type Message struct {
 	CreatedAt  time.Time
 }
 
-type PersistFunc func() ([]*Message, error)
+type PersistFunc func(tx pgx.Tx) ([]*Message, error)
 
 type EventRepository interface {
 	PersistInTx(ctx context.Context, f PersistFunc) error

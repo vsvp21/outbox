@@ -21,7 +21,7 @@ func (r *PgxRepository) PersistInTx(ctx context.Context, fn PersistFunc) error {
 		return fmt.Errorf("%w: transaction begin failed", err)
 	}
 
-	messages, err := fn()
+	messages, err := fn(tx)
 	if err != nil {
 		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
 			return fmt.Errorf("%w: transaction rollback while fn exec", rollbackErr)
