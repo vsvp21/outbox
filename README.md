@@ -19,6 +19,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"runtime"
@@ -30,8 +31,14 @@ import (
 
 type publisherMock struct{}
 
-func (p publisherMock) Publish(topic string, payload outbox.Payload) error {
-	fmt.Printf("published message to topic: %s, payload: %s", topic, string(payload.Data))
+func (p publisherMock) Publish(exchange, topic string, message *outbox.Message) error {
+	payload, err := json.Marshal(message.Payload)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("published message to topic: %s, payload: %s", topic, string(payload))
+
 	return nil
 }
 

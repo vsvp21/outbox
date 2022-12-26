@@ -2,7 +2,6 @@ package outbox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/avast/retry-go"
 	"github.com/rs/zerolog/log"
@@ -52,17 +51,11 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		consumed := newConsumedMessagesContainer(batchSize)
 		r.pool.Go(ctx, func(ctx context.Context) {
 			for msg := range concurrency.OrDone[*Message](ctx, msgCh) {
-				p, err := json.Marshal(msg.Payload)
-				if err != nil {
-					log.Error().Err(err).Msg("while payload unmarshall")
-					continue
-				}
-
 				publish := func() error {
-					return r.publisher.Publish(msg.RoutingKey, newPayload(msg.ID, p))
+					return r.publisher.Publish(msg.Exchange, msg.RoutingKey, msg)
 				}
 
-				err = retry.Do(publish, retry.Delay(PublishRetryDelay), retry.Attempts(PublishRetryAttempts), retry.Context(ctx))
+				err := retry.Do(publish, retry.Delay(PublishRetryDelay), retry.Attempts(PublishRetryAttempts), retry.Context(ctx))
 				if err != nil {
 					log.Error().Err(err).Msg("while publishing message")
 					continue
