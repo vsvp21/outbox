@@ -13,7 +13,7 @@ import (
 // publisherMock mocks message publishing
 type publisherMock struct{}
 
-func (p publisherMock) Publish(topic string, message *Message) error {
+func (p publisherMock) Publish(exchange, topic string, message *Message) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err

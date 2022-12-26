@@ -30,8 +30,7 @@ import (
 )
 
 type publisherMock struct{}
-
-func (p publisherMock) Publish(topic string, message *outbox.Message) error {
+func (p publisherMock) Publish(exchange, topic string, message *outbox.Message) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err
