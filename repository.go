@@ -30,10 +30,6 @@ func (r *PgxRepository) PersistInTx(ctx context.Context, fn PersistFunc) error {
 		return err
 	}
 
-	if len(messages) == 0 {
-		return nil
-	}
-
 	query := fmt.Sprintf(`
 INSERT INTO %s (id, event_type, payload, exchange, routing_key)
 VALUES($1, $2, $3, $4, $5)
