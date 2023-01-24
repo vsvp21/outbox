@@ -12,6 +12,20 @@ import (
 	"testing"
 )
 
+const createTableQuery = `
+create table if not exists outbox_messages
+(
+    id          uuid                                   not null
+        primary key,
+    consumed    boolean      default false             not null,
+    event_type  varchar(255)                           not null,
+    payload     jsonb                                  not null,
+    exchange    varchar(255)                           not null,
+    routing_key varchar(255)                           not null,
+    created_at  timestamp(0) default CURRENT_TIMESTAMP not null
+)
+`
+
 const input = `
 outbox_messages:
 - id: f53ec986-345f-48a4-b248-430a7d7f342a
@@ -36,26 +50,33 @@ outbox_messages:
 
 type PgxRepositoryTestSuite struct {
 	suite.Suite
-	pgx *pgxpool.Pool
-	db  *sql.DB
-	r   *PgxRepository
+	pgx          *pgxpool.Pool
+	db           *sql.DB
+	r            *PgxRepository
+	tableCreated bool
 }
 
 func (suite *PgxRepositoryTestSuite) SetupTest() {
-	conn, err := pgxpool.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/test_db")
+	conn, err := pgxpool.Connect(context.Background(), "postgres://db_user:secretsecret@localhost:5432/test")
 	if err != nil {
 		suite.Failf("failed to connect to pgx: %s", "", err)
 	}
 	suite.pgx = conn
 
-	dsn := "postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable"
-
+	dsn := "postgres://db_user:secretsecret@localhost:5432/test?sslmode=disable"
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		suite.Failf("failed to connect to postgres driver: %s", "", err)
 	}
 
 	suite.db = db
+	if !suite.tableCreated {
+		_, err := db.Exec(createTableQuery)
+		if err != nil {
+			suite.Failf("failed to create table: %s", "", err)
+		}
+		suite.tableCreated = true
+	}
 
 	suite.r = &PgxRepository{db: conn}
 }
@@ -80,8 +101,8 @@ func (suite *PgxRepositoryTestSuite) TearDownSuite() {
 }
 
 func (suite *PgxRepositoryTestSuite) TestFetch() {
-	suite.cleanDB()
 	suite.pollute()
+	defer suite.cleanDB()
 	messages, err := suite.r.Fetch(context.Background(), 100)
 	if err != nil {
 		return
@@ -91,8 +112,8 @@ func (suite *PgxRepositoryTestSuite) TestFetch() {
 }
 
 func (suite *PgxRepositoryTestSuite) TestMarkConsumed() {
-	suite.cleanDB()
 	suite.pollute()
+	defer suite.cleanDB()
 	err := suite.r.MarkConsumed(context.Background(), []*Message{
 		{
 			ID: "f53ec986-345f-48a4-b248-430a7d7f342a",
@@ -111,8 +132,8 @@ func (suite *PgxRepositoryTestSuite) TestMarkConsumed() {
 }
 
 func (suite *PgxRepositoryTestSuite) TestPersistInTx() {
-	suite.cleanDB()
 	suite.pollute()
+	defer suite.cleanDB()
 	err := suite.r.PersistInTx(context.Background(), func(tx pgx.Tx) ([]*Message, error) {
 		return []*Message{
 			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}},

@@ -27,8 +27,8 @@ jobs:
       postgres:
         image: postgres:11
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: db_user
+          POSTGRES_PASSWORD: secretsecret
           POSTGRES_DB: test_db
         ports:
           - 5432:5432
