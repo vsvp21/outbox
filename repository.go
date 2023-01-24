@@ -62,44 +62,6 @@ VALUES($1, $2, $3, $4, $5)
 	return nil
 }
 
-func (r *PgxRepository) Persist(ctx context.Context, messages []*Message) error {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("%w: transaction begin failed", err)
-	}
-
-	query := fmt.Sprintf(`
-INSERT INTO %s (id, event_type, payload, exchange, routing_key)
-VALUES($1, $2, $3, $4, $5)
-`, TableName)
-
-	for _, event := range messages {
-		_, err = tx.Exec(
-			ctx,
-			query,
-			event.ID,
-			event.EventType,
-			event.Payload,
-			event.Exchange,
-			event.RoutingKey,
-		)
-
-		if err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				return fmt.Errorf("%w: transaction rollback failed", rollbackErr)
-			}
-
-			return fmt.Errorf("%w: messages persist failed", err)
-		}
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("%w: transaction commit failed", err)
-	}
-
-	return nil
-}
-
 func (r *PgxRepository) Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error) {
 	query := fmt.Sprintf(`
 SELECT id, event_type, exchange, routing_key, payload, consumed, created_at

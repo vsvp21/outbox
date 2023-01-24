@@ -16,17 +16,17 @@ func NewRelay(repo EventRepository, publisher Publisher, publishWorkerPoolSize i
 		publisher:       publisher,
 		gen: messagesGenerator{
 			eventRepository: repo,
-			delay:           publishDelay,
+			t:               time.NewTicker(publishDelay),
 		},
-		pool: concurrency.NewWorkerPool(publishWorkerPoolSize),
+		publishWorkerPoolSize: publishWorkerPoolSize,
 	}
 }
 
 type Relay struct {
-	eventRepository EventRepository
-	publisher       Publisher
-	gen             messagesGenerator
-	pool            *concurrency.WorkerPool
+	eventRepository       EventRepository
+	publisher             Publisher
+	gen                   messagesGenerator
+	publishWorkerPoolSize int
 }
 
 func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
@@ -41,6 +41,8 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		}
 
 		msgCh := make(chan *Message, batchSize)
+		pool := NewAwaitingPool[*Message](r.publishWorkerPoolSize, msgCh)
+
 		go func() {
 			defer close(msgCh)
 			for _, msg := range m.messages {
@@ -49,26 +51,24 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		}()
 
 		consumed := newConsumedMessagesContainer(batchSize)
-		r.pool.Go(ctx, func(ctx context.Context) {
-			for msg := range concurrency.OrDone[*Message](ctx, msgCh) {
-				publish := func() error {
-					return r.publisher.Publish(msg.Exchange, msg.RoutingKey, msg)
-				}
-
-				err := retry.Do(publish, retry.Delay(PublishRetryDelay), retry.Attempts(PublishRetryAttempts), retry.Context(ctx))
-				if err != nil {
-					log.Error().Err(err).Msg("while publishing message")
-					continue
-				}
-
-				consumed.addMessage(msg)
-
-				log.Info().
-					Str("routing_key", msg.RoutingKey).
-					Str("id", msg.ID).
-					Interface("payload", msg.Payload).
-					Msg("Message published")
+		pool.Go(ctx, func(ctx context.Context, msg *Message) {
+			publish := func() error {
+				return r.publisher.Publish(msg.Exchange, msg.RoutingKey, msg)
 			}
+
+			err := retry.Do(publish, retry.Delay(PublishRetryDelay), retry.Attempts(PublishRetryAttempts), retry.Context(ctx))
+			if err != nil {
+				log.Error().Err(err).Msg("while publishing message")
+				return
+			}
+
+			consumed.addMessage(msg)
+
+			log.Info().
+				Str("routing_key", msg.RoutingKey).
+				Str("id", msg.ID).
+				Interface("payload", msg.Payload).
+				Msg("Message published")
 		})
 
 		if !consumed.empty() {
@@ -84,31 +84,9 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 	return nil
 }
 
-func newConsumedMessagesContainer(size BatchSize) *consumedMessagesContainer {
-	return &consumedMessagesContainer{
-		messages: make([]*Message, 0, size),
-	}
-}
-
-type consumedMessagesContainer struct {
-	messages []*Message
-	m        sync.Mutex
-}
-
-func (c *consumedMessagesContainer) addMessage(msg *Message) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.messages = append(c.messages, msg)
-}
-
-func (c *consumedMessagesContainer) empty() bool {
-	return len(c.messages) == 0
-}
-
 type messagesGenerator struct {
 	eventRepository EventRepository
-	delay           time.Duration
+	t               *time.Ticker
 }
 
 func (g messagesGenerator) getMessages(ctx context.Context, size BatchSize) <-chan *messagesEnvelope {
@@ -117,6 +95,7 @@ func (g messagesGenerator) getMessages(ctx context.Context, size BatchSize) <-ch
 	go func() {
 		defer func() {
 			close(ch)
+			g.t.Stop()
 			log.Info().Msg("stream finished")
 		}()
 
@@ -125,7 +104,7 @@ func (g messagesGenerator) getMessages(ctx context.Context, size BatchSize) <-ch
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-g.t.C:
 				messages, err := g.eventRepository.Fetch(ctx, size)
 				if err != nil {
 					ch <- newErrorMessagesEnvelope(fmt.Errorf("%w: fetching messages failed", err))
@@ -137,8 +116,6 @@ func (g messagesGenerator) getMessages(ctx context.Context, size BatchSize) <-ch
 				if len(messages) > 0 {
 					ch <- newMessagesEnvelope(messages)
 				}
-
-				time.Sleep(g.delay)
 			}
 		}
 	}()
@@ -161,4 +138,26 @@ func newMessagesEnvelope(messages []*Message) *messagesEnvelope {
 type messagesEnvelope struct {
 	messages []*Message
 	err      error
+}
+
+func newConsumedMessagesContainer(size BatchSize) *consumedMessagesContainer {
+	return &consumedMessagesContainer{
+		messages: make([]*Message, 0, size),
+	}
+}
+
+type consumedMessagesContainer struct {
+	messages []*Message
+	m        sync.Mutex
+}
+
+func (c *consumedMessagesContainer) addMessage(msg *Message) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.messages = append(c.messages, msg)
+}
+
+func (c *consumedMessagesContainer) empty() bool {
+	return len(c.messages) == 0
 }
