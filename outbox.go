@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/jackc/pgx/v4"
 	go_concurrency "github.com/vsvp21/go-concurrency"
 	"sync"
@@ -104,7 +103,6 @@ func (p *WorkerPool[T]) Go(ctx context.Context, fn func(ctx context.Context, v T
 		}()
 	}
 	p.wait()
-	fmt.Println(1245315)
 }
 
 func (p *WorkerPool[T]) add() {

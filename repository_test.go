@@ -42,13 +42,13 @@ type PgxRepositoryTestSuite struct {
 }
 
 func (suite *PgxRepositoryTestSuite) SetupTest() {
-	conn, err := pgxpool.Connect(context.Background(), "postgres://postgres:postgres@postgres:5432/test_db")
+	conn, err := pgxpool.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/test_db")
 	if err != nil {
 		suite.Failf("failed to connect to pgx: %s", "", err)
 	}
 	suite.pgx = conn
 
-	dsn := "postgres://postgres:postgres@postgres:5432/test_db?sslmode=disable"
+	dsn := "postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable"
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
