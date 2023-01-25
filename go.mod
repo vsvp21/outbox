@@ -9,7 +9,7 @@ require (
 	github.com/romanyx/polluter v1.2.2
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
-	github.com/vsvp21/go-concurrency v0.0.0-20221217154257-bbaec4d0d6ba
+	github.com/vsvp21/go-concurrency v1.0.0
 )
 
 require (

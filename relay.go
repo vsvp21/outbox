@@ -41,7 +41,7 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		}
 
 		msgCh := make(chan *Message, batchSize)
-		pool := NewAwaitingPool[*Message](r.publishWorkerPoolSize, msgCh)
+		pool := concurrency.NewAwaitingPool[*Message](r.publishWorkerPoolSize, msgCh)
 
 		go func() {
 			defer close(msgCh)
