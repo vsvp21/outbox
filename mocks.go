@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"sync"
 	"time"
 )
@@ -14,24 +13,6 @@ type RepositoryMock struct {
 	Cursor   int
 	FetchErr bool
 	mu       sync.Mutex
-}
-
-func (m *RepositoryMock) PersistInTx(ctx context.Context, f PersistFunc) error {
-	ms, err := f(&pgxpool.Tx{})
-	if err != nil {
-		return err
-	}
-
-	if err := m.Persist(ctx, ms); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *RepositoryMock) Persist(ctx context.Context, messages []*Message) error {
-	m.Messages = append(m.Messages, messages...)
-	return nil
 }
 
 func (m *RepositoryMock) Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error) {

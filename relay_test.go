@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"runtime"
@@ -32,13 +32,14 @@ func ExampleRelay_Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	c, err := pgxpool.Connect(ctx, "postgres://root:root@127.0.0.1:5432/db_name")
+	c, err := pgxpool.New(ctx, "postgres://root:root@127.0.0.1:5432/db_name")
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	p := NewPgxPersister(c)
 	r := NewPgxOutboxRepository(c)
-	if err = r.PersistInTx(ctx, func(tx pgx.Tx) ([]*Message, error) {
+	if err = p.PersistInTx(ctx, func(tx pgx.Tx) ([]*Message, error) {
 		return GenerateMessages(1000), nil
 	}); err != nil {
 		log.Fatal(err)
@@ -63,7 +64,16 @@ func TestRelay_Run(t *testing.T) {
 
 		p := &PublisherMock{Published: make([]*Message, 0, n)}
 
-		relay := NewRelay(r, p, runtime.NumCPU(), time.Millisecond)
+		relay := &Relay{
+			eventRepository: r,
+			publisher:       p,
+			gen: messagesGenerator{
+				eventRepository: r,
+				t:               time.NewTicker(time.Millisecond),
+			},
+			publishWorkerPoolSize: runtime.NumCPU(),
+		}
+
 		if err := relay.Run(ctx, BatchSize(10)); err != nil {
 			log.Fatal(err)
 		}
