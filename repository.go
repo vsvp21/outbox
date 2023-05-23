@@ -100,11 +100,13 @@ WHERE consumed = ? ORDER BY created_at DESC LIMIT ?
 	for rows.Next() {
 		message := &Message{}
 
-		err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.Payload, &message.Consumed, &message.CreatedAt)
+		var payload string
+		err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &payload, &message.Consumed, &message.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("%w: scan messages failed", err)
 		}
 
+		message.Payload = payload
 		messages = append(messages, message)
 	}
 
