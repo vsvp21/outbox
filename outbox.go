@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -54,6 +55,15 @@ type Message struct {
 	RoutingKey string
 	Consumed   bool
 	CreatedAt  time.Time
+}
+
+func (m *Message) BytePayload() ([]byte, error) {
+	switch p := m.Payload.(type) {
+	case string:
+		return []byte(p), nil
+	default:
+		return json.Marshal(m.Payload)
+	}
 }
 
 type EventRepository interface {
