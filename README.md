@@ -11,6 +11,7 @@ Transactional outbox based on polling publisher for PostgreSQL.
 * Create custom publisher
 * Create custom repository
 * Use custom outbox table
+* Publish in partitions
 
 ## Drivers:
 * pgx
@@ -30,7 +31,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vsvp21/outbox"
+	"github.com/vsvp21/outbox/v2"
 )
 
 type publisherMock struct{}
@@ -137,7 +138,7 @@ import (
 	"context"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vsvp21/outbox"
+	"github.com/vsvp21/outbox/v2"
 	"log"
 )
 
@@ -148,9 +149,9 @@ func main() {
 	}
 
 	p := outbox.NewPgxPersister(db)
-	p.PersistInTx(context.TODO(), func(tx pgx.Tx) ([]*outbox.Message, error) {
+	p.PersistInTx(context.TODO(), func(tx pgx.Tx) ([]outbox.Message, error) {
 		// SQL Queries
-		return []*outbox.Message{}, nil
+		return []outbox.Message{}, nil
 	})
 }
 ```
@@ -162,23 +163,26 @@ func main() {
 package main
 
 import (
-	"github.com/vsvp21/outbox"
+	"github.com/vsvp21/outbox/v2"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"log"
 )
 
 func main() {
-	db, err := gorm.Open(postgres.New(postgres.Config{
+	c := postgres.Config{
 		DSN: "host=127.0.0.1 user=db_user password=secretsecret dbname=test_db port=5432 sslmode=disable",
-	}), &gorm.Config{})
+	}
+
+	db, err := gorm.Open(postgres.New(c))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	p := outbox.NewGormPersister(db)
-	p.PersistInTx(func(tx *gorm.DB) ([]*outbox.Message, error) {
+	p.PersistInTx(func(tx *gorm.DB) ([]outbox.Message, error) {
 		// SQL Queries
-		return []*outbox.Message{}, nil
+		return []outbox.Message{}, nil
 	})
 }
 ```

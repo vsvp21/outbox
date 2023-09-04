@@ -16,7 +16,7 @@ type PgxPersister struct {
 	db *pgxpool.Pool
 }
 
-func (r *PgxPersister) PersistInTx(ctx context.Context, fn func(tx pgx.Tx) ([]*Message, error)) error {
+func (r *PgxPersister) PersistInTx(ctx context.Context, fn func(tx pgx.Tx) ([]Message, error)) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("%w: transaction begin failed", err)
@@ -32,8 +32,8 @@ func (r *PgxPersister) PersistInTx(ctx context.Context, fn func(tx pgx.Tx) ([]*M
 	}
 
 	query := fmt.Sprintf(`
-INSERT INTO %s (id, event_type, payload, exchange, routing_key)
-VALUES($1, $2, $3, $4, $5)
+INSERT INTO %s (id, event_type, payload, exchange, routing_key, partition_key)
+VALUES($1, $2, $3, $4, $5, $6)
 `, TableName)
 
 	for _, event := range messages {
@@ -45,6 +45,7 @@ VALUES($1, $2, $3, $4, $5)
 			event.Payload,
 			event.Exchange,
 			event.RoutingKey,
+			event.PartitionKey,
 		)
 
 		if err != nil {
@@ -71,7 +72,7 @@ type GormPersister struct {
 	db *gorm.DB
 }
 
-func (r *GormPersister) PersistInTx(fn func(tx *gorm.DB) ([]*Message, error)) error {
+func (r *GormPersister) PersistInTx(fn func(tx *gorm.DB) ([]Message, error)) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		messages, err := fn(tx)
 		if err != nil {
@@ -79,8 +80,8 @@ func (r *GormPersister) PersistInTx(fn func(tx *gorm.DB) ([]*Message, error)) er
 		}
 
 		query := fmt.Sprintf(`
-INSERT INTO %s (id, event_type, payload, exchange, routing_key)
-VALUES(?, ?, ?, ?, ?)
+INSERT INTO %s (id, event_type, payload, exchange, routing_key, partition_key)
+VALUES(?, ?, ?, ?, ?, ?)
 `, TableName)
 
 		for _, event := range messages {
@@ -91,6 +92,7 @@ VALUES(?, ?, ?, ?, ?)
 				event.Payload,
 				event.Exchange,
 				event.RoutingKey,
+				event.PartitionKey,
 			).Error
 
 			if err != nil {

@@ -2,71 +2,80 @@ package outbox
 
 import (
 	"context"
-	"errors"
+	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 )
 
 type RepositoryMock struct {
-	Messages []*Message
-	Consumed []*Message
+	Messages []Message
+	Consumed []string
 	Cursor   int
-	FetchErr bool
 	mu       sync.Mutex
 }
 
-func (m *RepositoryMock) Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error) {
-	if m.FetchErr {
-		return nil, errors.New("error")
-	}
+func (m *RepositoryMock) Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message {
+	ch := make(chan Message)
 
-	bs := int(batchSize)
+	go func() {
+		defer close(ch)
 
-	if m.Cursor > cap(m.Messages) {
-		return nil, nil
-	}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 
-	end := m.Cursor + bs
-	if end > cap(m.Messages) {
-		end = cap(m.Messages)
-	}
+			bs := int(batchSize)
+			if m.Cursor > cap(m.Messages) {
+				return
+			}
 
-	ms := m.Messages[m.Cursor:end]
-	m.Cursor = end
+			end := m.Cursor + bs
+			if end > cap(m.Messages) {
+				end = cap(m.Messages)
+			}
 
-	return ms, nil
+			for _, m := range m.Messages[m.Cursor:end] {
+				ch <- m
+			}
+
+			m.Cursor = end
+
+			time.Sleep(delay)
+		}
+	}()
+
+	return ch
 }
 
-func (m *RepositoryMock) MarkConsumed(ctx context.Context, messages []*Message) error {
+func (m *RepositoryMock) MarkConsumed(ctx context.Context, ids []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.Consumed = append(m.Consumed, messages...)
+	m.Consumed = append(m.Consumed, ids...)
 
 	return nil
 }
 
 type PublisherMock struct {
-	Published []*Message
+	Published []Message
 	mu        sync.Mutex
 }
 
-func (p *PublisherMock) Publish(exchange, topic string, message *Message) error {
+func (p *PublisherMock) Publish(exchange, topic string, message Message) error {
 	p.mu.Lock()
 	p.Published = append(p.Published, message)
 	p.mu.Unlock()
 
-	t := time.NewTicker(time.Millisecond)
-	defer t.Stop()
-
-	<-t.C
-
 	return nil
 }
 
-func GenerateMessages(n int) []*Message {
-	ms := make([]*Message, n)
+func GenerateMessages(n int) []Message {
+	ms := make([]Message, n)
 	for i := 0; i < n; i++ {
-		ms[i] = NewMessage("1", "Test", map[string]int{"num": i}, "test1", "test2")
+		ms[i] = NewMessage(strconv.Itoa(rand.Int()), "Test", map[string]int{"num": i}, "test1", "test1", strconv.Itoa(i))
 	}
 
 	return ms

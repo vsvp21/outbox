@@ -21,6 +21,7 @@ create table if not exists outbox_messages
     payload     jsonb                                  not null,
     exchange    varchar(255)                           not null,
     routing_key varchar(255)                           not null,
+    partition_key int                           not null,
     created_at  timestamp(0) default CURRENT_TIMESTAMP not null
 )
 `
@@ -33,18 +34,21 @@ outbox_messages:
   payload: "{}"
   exchange: test
   routing_key: test
+  partition_key: 1
 - id: f53ec986-345f-48a4-b248-430a7d7f342b
   consumed: true
   event_type: TestEvent
   payload: "{}"
   exchange: test
   routing_key: test
+  partition_key: 2
 - id: f53ec986-345f-48a4-b248-430a7d7f342c
   consumed: false
   event_type: TestEvent
   payload: "{}"
   exchange: test
   routing_key: test
+  partition_key: 3
 `
 
 // TestSuite base test suite
@@ -69,7 +73,7 @@ func (suite *TestSuite) cleanDB() {
 }
 
 func (suite *TestSuite) SetupTest() {
-	dsn := "postgres://db_user:secretsecret@localhost:5432/test_db?sslmode=disable"
+	dsn := "postgres://db_user:secretsecret@localhost:5432/outbox_test?sslmode=disable"
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		suite.Failf("failed to connect to postgres driver: %s", "", err)
@@ -96,7 +100,7 @@ type PgxTestSuite struct {
 }
 
 func (suite *PgxTestSuite) SetupTest() {
-	conn, err := pgxpool.New(context.Background(), "postgres://db_user:secretsecret@localhost:5432/test_db")
+	conn, err := pgxpool.New(context.Background(), "postgres://db_user:secretsecret@localhost:5432/outbox_test")
 	if err != nil {
 		suite.Failf("failed to connect to pgx: %s", "", err)
 	}
@@ -117,7 +121,7 @@ type GormTestSuite struct {
 
 func (suite *GormTestSuite) SetupTest() {
 	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN: "host=127.0.0.1 user=db_user password=secretsecret dbname=test_db port=5432 sslmode=disable",
+		DSN: "host=127.0.0.1 user=db_user password=secretsecret dbname=outbox_test port=5432 sslmode=disable",
 	}), &gorm.Config{})
 	if err != nil {
 		suite.Failf("failed to connect to pgx: %s", "", err)

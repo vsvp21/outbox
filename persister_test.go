@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
 	"testing"
+	"time"
 )
 
 // PgxPersisterTestSuite tests for pgx persister
@@ -24,10 +25,14 @@ func (suite *PgxPersisterTestSuite) SetupTest() {
 func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 	suite.pollute()
 	defer suite.cleanDB()
-	err := suite.p.PersistInTx(context.Background(), func(tx pgx.Tx) ([]*Message, error) {
-		return []*Message{
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}},
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}},
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	err := suite.p.PersistInTx(context.Background(), func(tx pgx.Tx) ([]Message, error) {
+		return []Message{
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}, PartitionKey: 1},
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}, PartitionKey: 2},
 		}, nil
 	})
 
@@ -35,12 +40,13 @@ func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 		suite.Failf("Cannot persist messages", "%s", err)
 	}
 
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		suite.Failf("Receiving messages from repo %s", "", err)
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(4, len(messages))
+	suite.Equal(4, len(c))
 }
 
 func TestPgxPersister(t *testing.T) {
@@ -63,8 +69,12 @@ func (suite *GormPersisterTestSuite) SetupTest() {
 func (suite *GormPersisterTestSuite) TestPersistInTx() {
 	suite.pollute()
 	defer suite.cleanDB()
-	err := suite.p.PersistInTx(func(tx *gorm.DB) ([]*Message, error) {
-		return []*Message{
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	err := suite.p.PersistInTx(func(tx *gorm.DB) ([]Message, error) {
+		return []Message{
 			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}},
 			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}},
 		}, nil
@@ -74,12 +84,13 @@ func (suite *GormPersisterTestSuite) TestPersistInTx() {
 		suite.Failf("Cannot persist messages", "%s", err)
 	}
 
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		suite.Failf("Receiving messages from repo %s", "", err)
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(4, len(messages))
+	suite.Equal(4, len(c))
 }
 
 func TestGormPersister(t *testing.T) {

@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,7 +16,7 @@ import (
 // publisherMock mocks message publishing
 type publisherMock struct{}
 
-func (p publisherMock) Publish(exchange, topic string, message *Message) error {
+func (p publisherMock) Publish(exchange, topic string, message Message) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err
@@ -39,7 +38,7 @@ func ExampleRelay_Run() {
 
 	p := NewPgxPersister(c)
 	r := NewPgxOutboxRepository(c)
-	if err = p.PersistInTx(ctx, func(tx pgx.Tx) ([]*Message, error) {
+	if err = p.PersistInTx(ctx, func(tx pgx.Tx) ([]Message, error) {
 		return GenerateMessages(1000), nil
 	}); err != nil {
 		log.Fatal(err)
@@ -62,16 +61,13 @@ func TestRelay_Run(t *testing.T) {
 			Messages: GenerateMessages(n),
 		}
 
-		p := &PublisherMock{Published: make([]*Message, 0, n)}
+		p := &PublisherMock{Published: make([]Message, 0, n)}
 
 		relay := &Relay{
 			eventRepository: r,
 			publisher:       p,
-			gen: messagesGenerator{
-				eventRepository: r,
-				t:               time.NewTicker(time.Millisecond),
-			},
-			publishWorkerPoolSize: runtime.NumCPU(),
+			delay:           time.Millisecond,
+			partitions:      runtime.NumCPU(),
 		}
 
 		if err := relay.Run(ctx, BatchSize(10)); err != nil {
@@ -80,89 +76,5 @@ func TestRelay_Run(t *testing.T) {
 
 		assert.Equal(t, n, len(p.Published))
 		assert.Equal(t, n, len(r.Consumed))
-	})
-}
-
-func TestGetMessages(t *testing.T) {
-	n := 10
-	r := &RepositoryMock{
-		Messages: GenerateMessages(n),
-	}
-
-	g := messagesGenerator{
-		eventRepository: r,
-		t:               time.NewTicker(time.Millisecond),
-	}
-
-	t.Run("Test receive messages", func(t *testing.T) {
-		t.Parallel()
-
-		msgCh := g.getMessages(context.Background(), 10)
-
-		msg := <-msgCh
-
-		assert.Equal(t, 10, len(msg.messages))
-		assert.Equal(t, nil, msg.err)
-	})
-}
-
-func TestGetMessagesError(t *testing.T) {
-	n := 10
-	r := &RepositoryMock{
-		Messages: GenerateMessages(n),
-		FetchErr: true,
-	}
-
-	g := messagesGenerator{
-		eventRepository: r,
-		t:               time.NewTicker(time.Millisecond),
-	}
-
-	t.Run("Test receive error envelope if error occurred", func(t *testing.T) {
-		t.Parallel()
-
-		msgCh := g.getMessages(context.Background(), 10)
-
-		msg := <-msgCh
-
-		assert.Equal(t, 0, len(msg.messages))
-		assert.True(t, msg.err != nil)
-	})
-}
-
-func TestMessageEnvelope(t *testing.T) {
-	t.Run("Test create error message", func(t *testing.T) {
-		t.Parallel()
-		err := errors.New("err")
-
-		e := newErrorMessagesEnvelope(err)
-
-		assert.True(t, errors.Is(e.err, err))
-	})
-
-	t.Run("Test create success message", func(t *testing.T) {
-		t.Parallel()
-		m := []*Message{{}}
-
-		e := newMessagesEnvelope(m)
-
-		assert.Nil(t, e.err)
-		assert.Equal(t, m, e.messages)
-	})
-}
-
-func TestMessageContainer(t *testing.T) {
-	t.Run("Test message container is not empty", func(t *testing.T) {
-		c := newConsumedMessagesContainer(1)
-
-		c.addMessage(&Message{})
-
-		assert.False(t, c.empty())
-	})
-
-	t.Run("Test message container is empty", func(t *testing.T) {
-		c := newConsumedMessagesContainer(1)
-
-		assert.True(t, c.empty())
 	})
 }

@@ -2,11 +2,12 @@ package outbox
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
+	concurrency "github.com/vsvp21/go-concurrency"
 	"gorm.io/gorm"
+	"time"
 )
 
 func NewPgxOutboxRepository(db *pgxpool.Pool) *PgxRepository {
@@ -17,42 +18,51 @@ type PgxRepository struct {
 	db *pgxpool.Pool
 }
 
-func (r *PgxRepository) Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error) {
+func (r *PgxRepository) Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message {
+	stream := make(chan Message, batchSize)
+
 	query := fmt.Sprintf(`
-SELECT id, event_type, exchange, routing_key, payload, consumed, created_at
+SELECT id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
 FROM %s
 WHERE consumed = $1 ORDER BY created_at DESC LIMIT $2
 `, TableName)
 
-	rows, err := r.db.Query(ctx, query, statusNotConsumed, batchSize)
-	if err != nil {
-		return nil, fmt.Errorf("%w: quering messages failed", err)
-	}
-	defer rows.Close()
+	d := time.NewTicker(delay)
+	go func() {
+		defer func() {
+			close(stream)
+			d.Stop()
+		}()
 
-	messages := make([]*Message, 0, batchSize)
-	for rows.Next() {
-		message := &Message{}
+		for range concurrency.OrDone[time.Time](ctx, d.C) {
+			rows, err := r.db.Query(ctx, query, statusNotConsumed, batchSize)
+			if err != nil {
+				log.Error().Err(err).Msg("while quering messages")
+				continue
+			}
 
-		err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.Payload, &message.Consumed, &message.CreatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("%w: scan messages failed", err)
+			for rows.Next() {
+				message := Message{}
+
+				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.RoutingKey, &message.Payload, &message.Consumed, &message.CreatedAt)
+				if err != nil {
+					log.Error().Err(err).Msg("while scan messages")
+					continue
+				}
+
+				stream <- message
+			}
+
+			rows.Close()
 		}
+	}()
 
-		messages = append(messages, message)
-	}
-
-	return messages, nil
+	return stream
 }
 
-func (r *PgxRepository) MarkConsumed(ctx context.Context, messages []*Message) error {
-	if len(messages) == 0 {
+func (r *PgxRepository) MarkConsumed(ctx context.Context, ids []string) error {
+	if ids == nil {
 		return nil
-	}
-
-	ids := make([]string, len(messages))
-	for i, msg := range messages {
-		ids[i] = msg.ID
 	}
 
 	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", TableName)
@@ -73,59 +83,67 @@ type GormRepository struct {
 	db *gorm.DB
 }
 
-func (r *GormRepository) Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error) {
+func (r *GormRepository) Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message {
+	stream := make(chan Message, batchSize)
+
 	query := fmt.Sprintf(`
-SELECT id, event_type, exchange, routing_key, payload, consumed, created_at
+SELECT id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
 FROM %s
 WHERE consumed = ? ORDER BY created_at DESC LIMIT ?
 `, TableName)
 
-	result := r.db.Raw(query, statusNotConsumed, batchSize)
-	if result.Error != nil {
-		return nil, fmt.Errorf("%w: quering messages failed", result.Error)
-	}
+	d := time.NewTicker(delay)
+	go func() {
+		defer func() {
+			close(stream)
+			d.Stop()
+		}()
 
-	messages := make([]*Message, 0, batchSize)
-	rows, err := result.Rows()
-	if err != nil {
-		return nil, fmt.Errorf("%w: fetching rows failed", err)
-	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			log.Error().Err(err).Send()
+		for range concurrency.OrDone[time.Time](ctx, d.C) {
+			result := r.db.Raw(query, statusNotConsumed, batchSize)
+			if result.Error != nil {
+				log.Error().Err(result.Error).Msg("[gorm] while quering messages")
+				continue
+			}
+
+			rows, err := result.Rows()
+			if err != nil {
+				log.Error().Err(result.Error).Msg("[gorm] fetching rows failed")
+				continue
+			}
+
+			for rows.Next() {
+				message := Message{}
+
+				var payload string
+				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.RoutingKey, &payload, &message.Consumed, &message.CreatedAt)
+				if err != nil {
+					log.Error().Err(err).Msg("[gorm] while scanning message")
+					continue
+				}
+
+				message.Payload = payload
+
+				stream <- message
+			}
+
+			if err := rows.Close(); err != nil {
+				log.Error().Err(err).Msg("[gorm] while closing rows")
+			}
 		}
-	}(rows)
+	}()
 
-	for rows.Next() {
-		message := &Message{}
-
-		var payload string
-		err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &payload, &message.Consumed, &message.CreatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("%w: scan messages failed", err)
-		}
-
-		message.Payload = payload
-		messages = append(messages, message)
-	}
-
-	return messages, nil
+	return stream
 }
 
-func (r *GormRepository) MarkConsumed(ctx context.Context, messages []*Message) error {
-	if len(messages) == 0 {
+func (r *GormRepository) MarkConsumed(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
 		return nil
-	}
-
-	ids := make([]string, len(messages))
-	for i, msg := range messages {
-		ids[i] = msg.ID
 	}
 
 	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", TableName)
 	if err := r.db.Exec(query, statusConsumed, ids).Error; err != nil {
-		return fmt.Errorf("%w: update consumed status failed", err)
+		return fmt.Errorf("[gorm] %w: update consumed status failed", err)
 	}
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/suite"
 	"testing"
+	"time"
 )
 
 // PgxRepositoryTestSuite pgx repository tests
@@ -21,32 +22,36 @@ func (suite *PgxRepositoryTestSuite) SetupTest() {
 func (suite *PgxRepositoryTestSuite) TestFetch() {
 	suite.pollute()
 	defer suite.cleanDB()
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		return
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(2, len(messages))
+	suite.Equal(2, len(c))
 }
 
 func (suite *PgxRepositoryTestSuite) TestMarkConsumed() {
 	suite.pollute()
 	defer suite.cleanDB()
-	err := suite.r.MarkConsumed(context.Background(), []*Message{
-		{
-			ID: "f53ec986-345f-48a4-b248-430a7d7f342a",
-		},
-	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	err := suite.r.MarkConsumed(context.Background(), []string{"f53ec986-345f-48a4-b248-430a7d7f342a"})
 	if err != nil {
 		return
 	}
 
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		suite.Failf("Receiving messages from repo %s", "", err)
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(1, len(messages))
+	suite.Equal(1, len(c))
 }
 
 func TestPgxRepository(t *testing.T) {
@@ -67,32 +72,38 @@ func (suite *GormRepositoryTestSuite) SetupTest() {
 func (suite *GormRepositoryTestSuite) TestFetch() {
 	suite.pollute()
 	defer suite.cleanDB()
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		return
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(2, len(messages))
+	suite.Equal(2, len(c))
 }
 
 func (suite *GormRepositoryTestSuite) TestMarkConsumed() {
 	suite.pollute()
 	defer suite.cleanDB()
-	err := suite.r.MarkConsumed(context.Background(), []*Message{
-		{
-			ID: "f53ec986-345f-48a4-b248-430a7d7f342a",
-		},
-	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+
+	err := suite.r.MarkConsumed(context.Background(), []string{"f53ec986-345f-48a4-b248-430a7d7f342a"})
 	if err != nil {
 		return
 	}
 
-	messages, err := suite.r.Fetch(context.Background(), 100)
-	if err != nil {
-		suite.Failf("Receiving messages from repo %s", "", err)
+	c := map[string]struct{}{}
+	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	for m := range ch {
+		c[m.ID] = struct{}{}
 	}
 
-	suite.Equal(1, len(messages))
+	suite.Equal(1, len(c))
 }
 
 func TestGormRepository(t *testing.T) {

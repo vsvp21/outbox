@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"time"
 )
 
@@ -17,12 +18,14 @@ const (
 var (
 	ErrBatchSizeOutOfRange = errors.New("invalid batch size")
 
-	TableName                 = "outbox_messages"
-	PublishRetryDelay         = time.Second
-	PublishRetryAttempts uint = 3
+	TableName                  = "outbox_messages"
+	PublishRetryDelay          = time.Second
+	PublishRetryAttempts  uint = 3
+	PartitionKeyAlgorithm      = partitionKey
 )
 
 type BatchSize uint
+type PartitionKeyAlg func(s string) int
 
 func (b BatchSize) Valid() error {
 	if b == 0 || b > maxBatchSize {
@@ -33,28 +36,30 @@ func (b BatchSize) Valid() error {
 }
 
 type Publisher interface {
-	Publish(exchange, topic string, message *Message) error
+	Publish(exchange, topic string, message Message) error
 }
 
-func NewMessage(id string, eventType string, payload interface{}, exchange, routingKey string) *Message {
-	return &Message{
-		ID:         id,
-		EventType:  eventType,
-		Payload:    payload,
-		Exchange:   exchange,
-		RoutingKey: routingKey,
-		CreatedAt:  time.Now(),
+func NewMessage(id string, eventType string, payload interface{}, exchange, partition, routingKey string) Message {
+	return Message{
+		ID:           id,
+		EventType:    eventType,
+		Payload:      payload,
+		Exchange:     exchange,
+		RoutingKey:   routingKey,
+		CreatedAt:    time.Now(),
+		PartitionKey: PartitionKeyAlgorithm(partition),
 	}
 }
 
 type Message struct {
-	ID         string
-	EventType  string
-	Payload    interface{}
-	Exchange   string
-	RoutingKey string
-	Consumed   bool
-	CreatedAt  time.Time
+	ID           string
+	EventType    string
+	Payload      interface{}
+	PartitionKey int
+	Exchange     string
+	RoutingKey   string
+	Consumed     bool
+	CreatedAt    time.Time
 }
 
 func (m *Message) BytePayload() ([]byte, error) {
@@ -67,6 +72,16 @@ func (m *Message) BytePayload() ([]byte, error) {
 }
 
 type EventRepository interface {
-	Fetch(ctx context.Context, batchSize BatchSize) ([]*Message, error)
-	MarkConsumed(ctx context.Context, messages []*Message) error
+	Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message
+	MarkConsumed(ctx context.Context, ids []string) error
+}
+
+func partitionKey(s string) int {
+	// Create an FNV-1a hash of the input string
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	hashValue := h.Sum32()
+
+	// Map the hash value to a partition within the specified range
+	return int(hashValue)
 }
