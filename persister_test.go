@@ -32,12 +32,12 @@ func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 
 	err := suite.p.PersistInTx(context.Background(), func(tx pgx.Tx) ([]Message, error) {
 		return []Message{
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}, PartitionKey: sql.NullInt32{
-				Int32: 1,
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}, PartitionKey: sql.NullInt64{
+				Int64: 1,
 				Valid: true,
 			}},
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}, PartitionKey: sql.NullInt32{
-				Int32: 2,
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}, PartitionKey: sql.NullInt64{
+				Int64: 2,
 				Valid: true,
 			}},
 		}, nil

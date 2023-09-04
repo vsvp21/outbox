@@ -21,7 +21,7 @@ create table if not exists outbox_messages
     payload     jsonb                                  not null,
     exchange    varchar(255)                           not null,
     routing_key varchar(255)                           not null,
-    partition_key int                           not null,
+    partition_key bigint,
     created_at  timestamp(0) default CURRENT_TIMESTAMP not null
 )
 `

@@ -48,8 +48,8 @@ func NewMessage(id string, eventType string, payload interface{}, exchange, part
 		Exchange:   exchange,
 		RoutingKey: routingKey,
 		CreatedAt:  time.Now(),
-		PartitionKey: sql.NullInt32{
-			Int32: PartitionKeyAlgorithm(partition),
+		PartitionKey: sql.NullInt64{
+			Int64: int64(PartitionKeyAlgorithm(partition)),
 			Valid: true,
 		},
 	}
@@ -59,7 +59,7 @@ type Message struct {
 	ID           string
 	EventType    string
 	Payload      interface{}
-	PartitionKey sql.NullInt32
+	PartitionKey sql.NullInt64
 	Exchange     string
 	RoutingKey   string
 	Consumed     bool
@@ -80,11 +80,11 @@ type EventRepository interface {
 	MarkConsumed(ctx context.Context, msg Message) error
 }
 
-func partitionKey(s string) int32 {
+func partitionKey(s string) int {
 	// Create an FNV-1a hash of the input string
 	h := fnv.New32a()
 	h.Write([]byte(s))
 
 	// Map the hash value to a partition within the specified range
-	return int32(h.Sum32())
+	return int(h.Sum32())
 }

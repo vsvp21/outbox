@@ -53,7 +53,8 @@ func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Mes
 		}()
 
 		for msg := range concurrency.OrDone[Message](ctx, ch) {
-			cs[int(msg.PartitionKey.Int32)%len(cs)] <- msg
+			a := int(msg.PartitionKey.Int64) % len(cs)
+			cs[a] <- msg
 		}
 	}()
 
