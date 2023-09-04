@@ -40,7 +40,7 @@ func (suite *PgxRepositoryTestSuite) TestMarkConsumed() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
 
-	err := suite.r.MarkConsumed(context.Background(), []string{"f53ec986-345f-48a4-b248-430a7d7f342a"})
+	err := suite.r.MarkConsumed(context.Background(), Message{ID: "f53ec986-345f-48a4-b248-430a7d7f342a"})
 	if err != nil {
 		return
 	}
@@ -92,7 +92,7 @@ func (suite *GormRepositoryTestSuite) TestMarkConsumed() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 	defer cancel()
 
-	err := suite.r.MarkConsumed(context.Background(), []string{"f53ec986-345f-48a4-b248-430a7d7f342a"})
+	err := suite.r.MarkConsumed(context.Background(), Message{ID: "f53ec986-345f-48a4-b248-430a7d7f342a"})
 	if err != nil {
 		return
 	}

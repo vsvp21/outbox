@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"hash/fnv"
@@ -41,13 +42,16 @@ type Publisher interface {
 
 func NewMessage(id string, eventType string, payload interface{}, exchange, partition, routingKey string) Message {
 	return Message{
-		ID:           id,
-		EventType:    eventType,
-		Payload:      payload,
-		Exchange:     exchange,
-		RoutingKey:   routingKey,
-		CreatedAt:    time.Now(),
-		PartitionKey: PartitionKeyAlgorithm(partition),
+		ID:         id,
+		EventType:  eventType,
+		Payload:    payload,
+		Exchange:   exchange,
+		RoutingKey: routingKey,
+		CreatedAt:  time.Now(),
+		PartitionKey: sql.NullInt32{
+			Int32: PartitionKeyAlgorithm(partition),
+			Valid: true,
+		},
 	}
 }
 
@@ -55,7 +59,7 @@ type Message struct {
 	ID           string
 	EventType    string
 	Payload      interface{}
-	PartitionKey int
+	PartitionKey sql.NullInt32
 	Exchange     string
 	RoutingKey   string
 	Consumed     bool
@@ -73,15 +77,14 @@ func (m *Message) BytePayload() ([]byte, error) {
 
 type EventRepository interface {
 	Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message
-	MarkConsumed(ctx context.Context, ids []string) error
+	MarkConsumed(ctx context.Context, msg Message) error
 }
 
-func partitionKey(s string) int {
+func partitionKey(s string) int32 {
 	// Create an FNV-1a hash of the input string
 	h := fnv.New32a()
 	h.Write([]byte(s))
-	hashValue := h.Sum32()
 
 	// Map the hash value to a partition within the specified range
-	return int(hashValue)
+	return int32(h.Sum32())
 }

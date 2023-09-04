@@ -53,7 +53,7 @@ func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Mes
 		}()
 
 		for msg := range concurrency.OrDone[Message](ctx, ch) {
-			cs[msg.PartitionKey%len(cs)] <- msg
+			cs[int(msg.PartitionKey.Int32)%len(cs)] <- msg
 		}
 	}()
 
@@ -99,20 +99,10 @@ func fanInPublish(ctx context.Context, publisher Publisher, cs []chan Message) <
 }
 
 func markConsumed(ctx context.Context, eventRepository EventRepository, ch <-chan Message, batchSize BatchSize) {
-	batch := make([]string, 0, batchSize)
-
 	for msg := range concurrency.OrDone[Message](ctx, ch) {
-		batch = append(batch, msg.ID)
-
-		if len(batch) == int(batchSize) {
-			if err := eventRepository.MarkConsumed(ctx, batch); err != nil {
-				log.Error().Err(err).Msg("while mark consumed")
-				continue
-			}
-
-			batch = batch[:0]
-
-			log.Info().Msgf("published %d messages", len(batch))
+		if err := eventRepository.MarkConsumed(ctx, msg); err != nil {
+			log.Error().Err(err).Msg("while mark consumed")
+			continue
 		}
 	}
 }

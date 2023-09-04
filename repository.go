@@ -60,13 +60,13 @@ WHERE consumed = $1 ORDER BY created_at DESC LIMIT $2
 	return stream
 }
 
-func (r *PgxRepository) MarkConsumed(ctx context.Context, ids []string) error {
-	if ids == nil {
+func (r *PgxRepository) MarkConsumed(ctx context.Context, msg Message) error {
+	if msg.ID == "" {
 		return nil
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", TableName)
-	if _, err := r.db.Exec(ctx, query, statusConsumed, ids); err != nil {
+	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=$2", TableName)
+	if _, err := r.db.Exec(ctx, query, statusConsumed, msg.ID); err != nil {
 		return fmt.Errorf("%w: update consumed status failed", err)
 	}
 
@@ -136,13 +136,13 @@ WHERE consumed = ? ORDER BY created_at DESC LIMIT ?
 	return stream
 }
 
-func (r *GormRepository) MarkConsumed(ctx context.Context, ids []string) error {
-	if len(ids) == 0 {
+func (r *GormRepository) MarkConsumed(ctx context.Context, msg Message) error {
+	if msg.ID == "" {
 		return nil
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=ANY($2)", TableName)
-	if err := r.db.Exec(query, statusConsumed, ids).Error; err != nil {
+	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=$2", TableName)
+	if err := r.db.Exec(query, statusConsumed, msg.ID).Error; err != nil {
 		return fmt.Errorf("[gorm] %w: update consumed status failed", err)
 	}
 

@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"database/sql"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
@@ -31,8 +32,14 @@ func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 
 	err := suite.p.PersistInTx(context.Background(), func(tx pgx.Tx) ([]Message, error) {
 		return []Message{
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}, PartitionKey: 1},
-			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}, PartitionKey: 2},
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342f", Payload: map[string]string{}, PartitionKey: sql.NullInt32{
+				Int32: 1,
+				Valid: true,
+			}},
+			{ID: "f53ec986-345f-48a4-b248-430a7d7f342e", Payload: map[string]string{}, PartitionKey: sql.NullInt32{
+				Int32: 2,
+				Valid: true,
+			}},
 		}, nil
 	})
 

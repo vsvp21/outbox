@@ -51,10 +51,10 @@ func (m *RepositoryMock) Fetch(ctx context.Context, delay time.Duration, batchSi
 	return ch
 }
 
-func (m *RepositoryMock) MarkConsumed(ctx context.Context, ids []string) error {
+func (m *RepositoryMock) MarkConsumed(ctx context.Context, msg Message) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.Consumed = append(m.Consumed, ids...)
+	m.Consumed = append(m.Consumed, msg.ID)
 
 	return nil
 }
