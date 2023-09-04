@@ -44,7 +44,7 @@ WHERE consumed = $1 ORDER BY created_at DESC LIMIT $2
 			for rows.Next() {
 				message := Message{}
 
-				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.RoutingKey, &message.Payload, &message.Consumed, &message.CreatedAt)
+				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.PartitionKey, &message.Payload, &message.Consumed, &message.CreatedAt)
 				if err != nil {
 					log.Error().Err(err).Msg("while scan messages")
 					continue
@@ -116,7 +116,7 @@ WHERE consumed = ? ORDER BY created_at DESC LIMIT ?
 				message := Message{}
 
 				var payload string
-				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.RoutingKey, &payload, &message.Consumed, &message.CreatedAt)
+				err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.PartitionKey, &payload, &message.Consumed, &message.CreatedAt)
 				if err != nil {
 					log.Error().Err(err).Msg("[gorm] while scanning message")
 					continue
