@@ -22,9 +22,9 @@ func (r *PgxRepository) Fetch(ctx context.Context, delay time.Duration, batchSiz
 	stream := make(chan Message, batchSize)
 
 	query := fmt.Sprintf(`
-SELECT id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
+SELECT event_id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
 FROM %s
-WHERE consumed = $1 ORDER BY created_at DESC LIMIT $2
+WHERE consumed = $1 ORDER BY id ASC LIMIT $2
 `, TableName)
 
 	d := time.NewTicker(delay)
@@ -65,7 +65,7 @@ func (r *PgxRepository) MarkConsumed(ctx context.Context, msg Message) error {
 		return nil
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=$2", TableName)
+	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE event_id=$2", TableName)
 	if _, err := r.db.Exec(ctx, query, statusConsumed, msg.ID); err != nil {
 		return fmt.Errorf("%w: update consumed status failed", err)
 	}
@@ -87,9 +87,9 @@ func (r *GormRepository) Fetch(ctx context.Context, delay time.Duration, batchSi
 	stream := make(chan Message, batchSize)
 
 	query := fmt.Sprintf(`
-SELECT id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
+SELECT event_id, event_type, exchange, routing_key, partition_key, payload, consumed, created_at
 FROM %s
-WHERE consumed = ? ORDER BY created_at DESC LIMIT ?
+WHERE consumed = ? ORDER BY id ASC LIMIT ?
 `, TableName)
 
 	d := time.NewTicker(delay)
@@ -141,7 +141,7 @@ func (r *GormRepository) MarkConsumed(ctx context.Context, msg Message) error {
 		return nil
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE id=$2", TableName)
+	query := fmt.Sprintf("UPDATE %s SET consumed=$1 WHERE event_id=$2", TableName)
 	if err := r.db.Exec(query, statusConsumed, msg.ID).Error; err != nil {
 		return fmt.Errorf("[gorm] %w: update consumed status failed", err)
 	}

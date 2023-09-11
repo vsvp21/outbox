@@ -32,7 +32,7 @@ func (r *PgxPersister) PersistInTx(ctx context.Context, fn func(tx pgx.Tx) ([]Me
 	}
 
 	query := fmt.Sprintf(`
-INSERT INTO %s (id, event_type, payload, exchange, routing_key, partition_key)
+INSERT INTO %s (event_id, event_type, payload, exchange, routing_key, partition_key)
 VALUES($1, $2, $3, $4, $5, $6)
 `, TableName)
 
@@ -80,7 +80,7 @@ func (r *GormPersister) PersistInTx(fn func(tx *gorm.DB) ([]Message, error)) err
 		}
 
 		query := fmt.Sprintf(`
-INSERT INTO %s (id, event_type, payload, exchange, routing_key, partition_key)
+INSERT INTO %s (event_id, event_type, payload, exchange, routing_key, partition_key)
 VALUES(?, ?, ?, ?, ?, ?)
 `, TableName)
 

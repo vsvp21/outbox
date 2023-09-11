@@ -14,8 +14,8 @@ import (
 const createTableQuery = `
 create table if not exists outbox_messages
 (
-    id          uuid                                   not null
-        primary key,
+    id         bigserial primary key, 
+    event_id          uuid                                   not null,
     consumed    boolean      default false             not null,
     event_type  varchar(255)                           not null,
     payload     jsonb                                  not null,
@@ -28,21 +28,21 @@ create table if not exists outbox_messages
 
 const input = `
 outbox_messages:
-- id: f53ec986-345f-48a4-b248-430a7d7f342a
+- event_id: f53ec986-345f-48a4-b248-430a7d7f342a
   consumed: false
   event_type: TestEvent
   payload: "{}"
   exchange: test
   routing_key: test
   partition_key: 1
-- id: f53ec986-345f-48a4-b248-430a7d7f342b
+- event_id: f53ec986-345f-48a4-b248-430a7d7f342b
   consumed: true
   event_type: TestEvent
   payload: "{}"
   exchange: test
   routing_key: test
   partition_key: 2
-- id: f53ec986-345f-48a4-b248-430a7d7f342c
+- event_id: f53ec986-345f-48a4-b248-430a7d7f342c
   consumed: false
   event_type: TestEvent
   payload: "{}"
