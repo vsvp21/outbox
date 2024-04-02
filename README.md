@@ -27,15 +27,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vsvp21/outbox/v2"
+	"github.com/vsvp21/outbox/v5"
 )
 
-type publisherMock struct{}
-func (p publisherMock) Publish(exchange, topic string, message *outbox.Message) error {
+type Publisher struct{}
+func (p Publisher) Publish(exchange, topic string, message outbox.Message) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err
@@ -55,9 +54,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := outbox.NewPgxOutboxRepository(c)
+	r := outbox.NewRepository(outbox.NewPGXAdapter(c))
 
-	relay := outbox.NewRelay(r, publisherMock{}, runtime.NumCPU(), time.Second)
+	relay := outbox.NewRelay(r, Publisher{}, 1_000, time.Millisecond)
 	if err = relay.Run(ctx, outbox.BatchSize(100)); err != nil {
 		log.Fatal(err)
 	}
@@ -74,17 +73,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/vsvp21/outbox"
+	"github.com/vsvp21/outbox/v5"
 )
 
-type publisherMock struct{}
-func (p publisherMock) Publish(exchange, topic string, message *outbox.Message) error {
+type Publisher struct{}
+
+func (p Publisher) Publish(exchange, topic string, message outbox.Message) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err
@@ -106,9 +105,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := outbox.NewGormRepository(c)
+	r := outbox.NewRepository(outbox.NewGORMAdapter(db))
 
-	relay := outbox.NewRelay(r, publisherMock{}, runtime.NumCPU(), time.Second)
+	relay := outbox.NewRelay(r, Publisher{}, 1_000, time.Millisecond)
 	if err = relay.Run(ctx, outbox.BatchSize(100)); err != nil {
 		log.Fatal(err)
 	}
@@ -120,7 +119,7 @@ func main() {
 ```go
 package main
 
-import "github.com/vsvp21/outbox"
+import "github.com/vsvp21/outbox/v5"
 
 func main() {
 	// Your code ...
@@ -136,10 +135,11 @@ package main
 
 import (
 	"context"
+	"log"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vsvp21/outbox/v2"
-	"log"
+	"github.com/vsvp21/outbox/v5"
 )
 
 func main() {
@@ -163,10 +163,11 @@ func main() {
 package main
 
 import (
-	"github.com/vsvp21/outbox/v2"
+	"log"
+
+	"github.com/vsvp21/outbox/v5"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
 )
 
 func main() {

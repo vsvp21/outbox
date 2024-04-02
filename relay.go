@@ -2,11 +2,12 @@ package outbox
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/avast/retry-go"
 	"github.com/rs/zerolog/log"
 	concurrency "github.com/vsvp21/go-concurrency"
-	"sync"
-	"time"
 )
 
 func NewRelay(repo EventRepository, publisher Publisher, partitions int, publishDelay time.Duration) *Relay {
@@ -30,13 +31,20 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		return err
 	}
 
-	messagesStream := r.eventRepository.Fetch(ctx, r.delay, batchSize)
-	partitionedMessagesStreams := partitionedFanOut(ctx, messagesStream, r.partitions)
-	publishStream := fanInPublish(ctx, r.publisher, partitionedMessagesStreams)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
 
-	markConsumed(ctx, r.eventRepository, publishStream, batchSize)
+		messagesStream := r.eventRepository.Fetch(ctx, batchSize)
+		partitionedMessagesStreams := partitionedFanOut(ctx, messagesStream, r.partitions)
+		publishStream := fanInPublish(ctx, r.publisher, partitionedMessagesStreams)
+		markConsumed(ctx, r.eventRepository, publishStream, batchSize)
 
-	return nil
+		time.Sleep(r.delay)
+	}
 }
 
 func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Message {
@@ -53,8 +61,7 @@ func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Mes
 		}()
 
 		for msg := range concurrency.OrDone[Message](ctx, ch) {
-			a := int(msg.PartitionKey.Int64) % len(cs)
-			cs[a] <- msg
+			cs[int(msg.PartitionKey.Int64)%len(cs)] <- msg
 		}
 	}()
 
@@ -85,10 +92,10 @@ func fanInPublish(ctx context.Context, publisher Publisher, cs []chan Message) <
 
 					fanInCh <- msg
 
-					log.Info().
-						Str("routing_key", msg.RoutingKey).
-						Str("id", msg.ID).
-						Msg("Message published")
+					//log.Info().
+					//	Str("routing_key", msg.RoutingKey).
+					//	Str("id", msg.ID).
+					//	Msg("Message published")
 				}
 			}(ch)
 		}
@@ -100,10 +107,14 @@ func fanInPublish(ctx context.Context, publisher Publisher, cs []chan Message) <
 }
 
 func markConsumed(ctx context.Context, eventRepository EventRepository, ch <-chan Message, batchSize BatchSize) {
+	msgs := make([]Message, 0, batchSize)
+
 	for msg := range concurrency.OrDone[Message](ctx, ch) {
-		if err := eventRepository.MarkConsumed(ctx, msg); err != nil {
-			log.Error().Err(err).Msg("while mark consumed")
-			continue
-		}
+		msgs = append(msgs, msg)
+	}
+
+	if err := eventRepository.MarkConsumed(ctx, msgs); err != nil {
+		log.Error().Err(err).Msg("while mark consumed")
+		return
 	}
 }

@@ -1,4 +1,4 @@
-module github.com/vsvp21/outbox/v4
+module github.com/vsvp21/outbox/v5
 
 go 1.19
 

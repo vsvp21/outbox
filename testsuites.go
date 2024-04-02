@@ -3,12 +3,13 @@ package outbox
 import (
 	"context"
 	"database/sql"
+	"strings"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/romanyx/polluter"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"strings"
 )
 
 const createTableQuery = `
@@ -55,6 +56,8 @@ outbox_messages:
 type TestSuite struct {
 	suite.Suite
 	db           *sql.DB
+	pgxDB        *pgxpool.Pool
+	gormDB       *gorm.DB
 	tableCreated bool
 }
 
@@ -87,46 +90,25 @@ func (suite *TestSuite) SetupTest() {
 		}
 		suite.tableCreated = true
 	}
-}
 
-func (suite *TestSuite) TearDownSuite() {
-	suite.db.Close()
-}
-
-// PgxTestSuite base test suite for pgx tests
-type PgxTestSuite struct {
-	TestSuite
-	pgx *pgxpool.Pool
-}
-
-func (suite *PgxTestSuite) SetupTest() {
-	conn, err := pgxpool.New(context.Background(), "postgres://db_user:secretsecret@localhost:5432/outbox_test")
-	if err != nil {
-		suite.Failf("failed to connect to pgx: %s", "", err)
-	}
-	suite.pgx = conn
-	suite.TestSuite.SetupTest()
-}
-
-func (suite *PgxTestSuite) TearDownSuite() {
-	suite.TestSuite.TearDownSuite()
-	suite.pgx.Close()
-}
-
-// GormTestSuite base test suite for gorm tests
-type GormTestSuite struct {
-	TestSuite
-	gorm *gorm.DB
-}
-
-func (suite *GormTestSuite) SetupTest() {
-	db, err := gorm.Open(postgres.New(postgres.Config{
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{
 		DSN: "host=127.0.0.1 user=db_user password=secretsecret dbname=outbox_test port=5432 sslmode=disable",
 	}), &gorm.Config{})
 	if err != nil {
 		suite.Failf("failed to connect to pgx: %s", "", err)
 	}
 
-	suite.gorm = db
-	suite.TestSuite.SetupTest()
+	suite.gormDB = gormDB
+
+	conn, err := pgxpool.New(context.Background(), "postgres://db_user:secretsecret@localhost:5432/outbox_test")
+	if err != nil {
+		suite.Failf("failed to connect to pgx: %s", "", err)
+	}
+
+	suite.pgxDB = conn
+}
+
+func (suite *TestSuite) TearDownSuite() {
+	suite.db.Close()
+	suite.pgxDB.Close()
 }

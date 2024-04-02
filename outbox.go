@@ -76,8 +76,8 @@ func (m *Message) BytePayload() ([]byte, error) {
 }
 
 type EventRepository interface {
-	Fetch(ctx context.Context, delay time.Duration, batchSize BatchSize) <-chan Message
-	MarkConsumed(ctx context.Context, msg Message) error
+	Fetch(ctx context.Context, batchSize BatchSize) <-chan Message
+	MarkConsumed(ctx context.Context, msgs []Message) error
 }
 
 func partitionKey(s string) int {

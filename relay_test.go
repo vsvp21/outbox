@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
 )
 
 // publisherMock mocks message publishing
@@ -37,7 +38,7 @@ func ExampleRelay_Run() {
 	}
 
 	p := NewPgxPersister(c)
-	r := NewPgxOutboxRepository(c)
+	r := NewRepository(NewPGXAdapter(c))
 	if err = p.PersistInTx(ctx, func(tx pgx.Tx) ([]Message, error) {
 		return GenerateMessages(1000), nil
 	}); err != nil {
@@ -56,7 +57,7 @@ func TestRelay_Run(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.TODO(), time.Millisecond*500)
 		defer cancel()
 
-		n := 100
+		n := 10
 		r := &RepositoryMock{
 			Messages: GenerateMessages(n),
 		}

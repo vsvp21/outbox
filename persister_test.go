@@ -3,32 +3,29 @@ package outbox
 import (
 	"context"
 	"database/sql"
+	"testing"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
-	"testing"
-	"time"
 )
 
 // PgxPersisterTestSuite tests for pgx persister
 type PgxPersisterTestSuite struct {
-	PgxTestSuite
+	TestSuite
 	p *PgxPersister
-	r *PgxRepository
+	r *Repository
 }
 
 func (suite *PgxPersisterTestSuite) SetupTest() {
-	suite.PgxTestSuite.SetupTest()
-	suite.p = &PgxPersister{db: suite.pgx}
-	suite.r = &PgxRepository{db: suite.pgx}
+	suite.TestSuite.SetupTest()
+	suite.p = &PgxPersister{db: suite.pgxDB}
+	suite.r = &Repository{db: NewPGXAdapter(suite.pgxDB)}
 }
 
 func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 	suite.pollute()
 	defer suite.cleanDB()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-	defer cancel()
 
 	err := suite.p.PersistInTx(context.Background(), func(tx pgx.Tx) ([]Message, error) {
 		return []Message{
@@ -48,7 +45,7 @@ func (suite *PgxPersisterTestSuite) TestPersistInTx() {
 	}
 
 	c := map[string]struct{}{}
-	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	ch := suite.r.Fetch(context.TODO(), 100)
 	for m := range ch {
 		c[m.ID] = struct{}{}
 	}
@@ -62,23 +59,20 @@ func TestPgxPersister(t *testing.T) {
 
 // GormPersisterTestSuite tests for gorm persister
 type GormPersisterTestSuite struct {
-	GormTestSuite
+	TestSuite
 	p *GormPersister
-	r *GormRepository
+	r *Repository
 }
 
 func (suite *GormPersisterTestSuite) SetupTest() {
-	suite.GormTestSuite.SetupTest()
-	suite.p = &GormPersister{db: suite.gorm}
-	suite.r = &GormRepository{db: suite.gorm}
+	suite.TestSuite.SetupTest()
+	suite.p = &GormPersister{db: suite.gormDB}
+	suite.r = &Repository{db: NewGORMAdapter(suite.gormDB)}
 }
 
 func (suite *GormPersisterTestSuite) TestPersistInTx() {
 	suite.pollute()
 	defer suite.cleanDB()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-	defer cancel()
 
 	err := suite.p.PersistInTx(func(tx *gorm.DB) ([]Message, error) {
 		return []Message{
@@ -92,7 +86,7 @@ func (suite *GormPersisterTestSuite) TestPersistInTx() {
 	}
 
 	c := map[string]struct{}{}
-	ch := suite.r.Fetch(ctx, time.Millisecond, 100)
+	ch := suite.r.Fetch(context.TODO(), 100)
 	for m := range ch {
 		c[m.ID] = struct{}{}
 	}
