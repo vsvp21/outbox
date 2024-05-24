@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"hash/fnv"
 	"time"
@@ -70,8 +69,10 @@ func (m *Message) BytePayload() ([]byte, error) {
 	switch p := m.Payload.(type) {
 	case string:
 		return []byte(p), nil
+	case []uint8:
+		return p, nil
 	default:
-		return json.Marshal(m.Payload)
+		return nil, errors.New("unsupported payload type")
 	}
 }
 

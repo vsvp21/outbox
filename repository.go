@@ -36,14 +36,11 @@ WHERE consumed = $1 ORDER BY created_at ASC LIMIT $2
 		for rows.Next() {
 			message := Message{}
 
-			var payload string
-			err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.PartitionKey, &payload, &message.Consumed, &message.CreatedAt)
+			err = rows.Scan(&message.ID, &message.EventType, &message.Exchange, &message.RoutingKey, &message.PartitionKey, &message.Payload, &message.Consumed, &message.CreatedAt)
 			if err != nil {
-				log.Error().Err(err).Msg("while scanning message")
+				log.Error().Err(err).Msg("while scan messages")
 				continue
 			}
-
-			message.Payload = payload
 
 			stream <- message
 		}
