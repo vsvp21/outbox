@@ -109,6 +109,6 @@ func (suite *TestSuite) SetupTest() {
 }
 
 func (suite *TestSuite) TearDownSuite() {
-	suite.db.Close()
+	suite.db.Close() //nolint
 	suite.pgxDB.Close()
 }

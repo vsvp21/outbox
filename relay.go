@@ -38,19 +38,27 @@ func (r *Relay) Run(ctx context.Context, batchSize BatchSize) error {
 		default:
 		}
 
-		messagesStream := r.eventRepository.Fetch(ctx, batchSize)
-		partitionedMessagesStreams := partitionedFanOut(ctx, messagesStream, r.partitions)
-		publishStream := fanInPublish(ctx, r.publisher, partitionedMessagesStreams)
-		markConsumed(ctx, r.eventRepository, publishStream, batchSize)
+		batchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		func() {
+			defer cancel()
+			messagesStream := r.eventRepository.Fetch(batchCtx, batchSize)
+			partitionedMessagesStreams := partitionedFanOut(batchCtx, messagesStream, r.partitions)
+			publishStream := fanInPublish(batchCtx, r.publisher, partitionedMessagesStreams)
+			markConsumed(batchCtx, r.eventRepository, publishStream, batchSize)
+		}()
 
-		time.Sleep(r.delay)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(r.delay):
+		}
 	}
 }
 
 func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Message {
 	cs := make([]chan Message, n)
 	for i := 0; i < n; i++ {
-		cs[i] = make(chan Message)
+		cs[i] = make(chan Message, 1000)
 	}
 
 	go func() {
@@ -61,7 +69,19 @@ func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Mes
 		}()
 
 		for msg := range concurrency.OrDone[Message](ctx, ch) {
-			cs[int(msg.PartitionKey.Int64)%len(cs)] <- msg
+			partitionIdx := int(msg.PartitionKey.Int64) % len(cs)
+
+			select {
+			case cs[partitionIdx] <- msg:
+			case <-ctx.Done():
+				log.Info().Msg("context cancelled while partitioning messages")
+				return
+			default:
+				log.Info().
+					Int("partition", partitionIdx).
+					Str("message_id", msg.ID).
+					Msg("partition channel full, dropping message")
+			}
 		}
 	}()
 
@@ -69,7 +89,7 @@ func partitionedFanOut(ctx context.Context, ch <-chan Message, n int) []chan Mes
 }
 
 func fanInPublish(ctx context.Context, publisher Publisher, cs []chan Message) <-chan Message {
-	fanInCh := make(chan Message)
+	fanInCh := make(chan Message, 1000)
 
 	go func() {
 		defer close(fanInCh)
@@ -90,12 +110,12 @@ func fanInPublish(ctx context.Context, publisher Publisher, cs []chan Message) <
 						return
 					}
 
-					fanInCh <- msg
-
-					//log.Info().
-					//	Str("routing_key", msg.RoutingKey).
-					//	Str("id", msg.ID).
-					//	Msg("Message published")
+					select {
+					case fanInCh <- msg:
+					case <-ctx.Done():
+						log.Warn().Msg("context cancelled while trying to send published message")
+						return
+					}
 				}
 			}(ch)
 		}
@@ -113,8 +133,13 @@ func markConsumed(ctx context.Context, eventRepository EventRepository, ch <-cha
 		msgs = append(msgs, msg)
 	}
 
-	if err := eventRepository.MarkConsumed(ctx, msgs); err != nil {
-		log.Error().Err(err).Msg("while mark consumed")
+	if len(msgs) == 0 {
 		return
+	}
+
+	if err := eventRepository.MarkConsumed(ctx, msgs); err != nil {
+		log.Error().Err(err).
+			Int("message_count", len(msgs)).
+			Msg("failed to mark messages as consumed - messages will be reprocessed")
 	}
 }
